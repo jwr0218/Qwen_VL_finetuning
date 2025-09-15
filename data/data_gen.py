@@ -7,7 +7,7 @@ class WebtoonQueryAnswerGenerator:
     def __init__(self, json_data: List[Dict]):
         self.data = json_data
     
-    def generate_scene_description_qa(self) -> List[Dict]:
+    def generate_scene_description_qa(self,previous_query = True) -> List[Dict]:
         """장면 묘사 Task용 Query-Answer 생성"""
         qa_pairs = []
         
@@ -18,9 +18,11 @@ class WebtoonQueryAnswerGenerator:
             description = page['overall_description']
             
             # 기본 장면 묘사 QA
+
+
             qa_pairs.append({
                 "image_path": page.get('image', ''),
-                "query": "이 웹툰 페이지에서 일어나고 있는 상황을 자세히 설명해주세요.",
+                "query": f"이전 상황 : {page['previous_description']}\n\n이 웹툰 페이지에서 일어나고 있는 상황을 자세히 설명해주세요.",
                 "answer": description.get('text', '')
             })
             
@@ -28,14 +30,14 @@ class WebtoonQueryAnswerGenerator:
             if 'scene_analysis' in description:
                 qa_pairs.append({
                     "image_path": page.get('image', ''),
-                    "query": "이 장면이 전체 스토리에서 어떤 역할을 하는지 분석해주세요.",
+                    "query": f"이전 상황 : {page['previous_description']}\n\n이 장면이 전체 스토리에서 어떤 역할을 하는지 분석해주세요.",
                     "answer": json.dumps(description['scene_analysis'], ensure_ascii=False, indent=2)
                 })
             
             # 서사적 맥락 질문
             qa_pairs.append({
                 "image_path": page.get('image', ''),
-                "query": "이 웹툰 장면의 서사적 맥락과 스토리 전개를 설명해주세요.",
+                "query": f"이전 상황 : {page['previous_description']}\n\n이 웹툰 장면의 서사적 맥락과 스토리 전개를 설명해주세요.",
                 "answer": f"전체 상황: {description.get('text', '')}\n\n장면 분석: {json.dumps(description.get('scene_analysis', {}), ensure_ascii=False, indent=2)}"
             })
         
@@ -137,7 +139,7 @@ class WebtoonQueryAnswerGenerator:
                 # 전체 용어집 QA
                 qa_pairs.append({
                     "image_path": page.get('image', ''),
-                    "query": "이 웹툰에서 사용된 특별한 용어들과 그 의미를 설명해주세요.",
+                    "query": f"이전 상황 : {page['previous_description']}\n\n이 웹툰에서 사용된 특별한 용어들과 그 의미를 설명해주세요.",
                     "answer": json.dumps(glossary, ensure_ascii=False, indent=2)
                 })
                 
@@ -145,7 +147,7 @@ class WebtoonQueryAnswerGenerator:
                 for term, definition in glossary.items():
                     qa_pairs.append({
                         "image_path": page.get('image', ''),
-                        "query": f"이 웹툰에서 '{term}'의 의미는 무엇인가요?",
+                        "query": f"이전 상황 : {page['previous_description']}\n\n이 웹툰에서 '{term}'의 의미는 무엇인가요?",
                         "answer": definition
                     })
                 
@@ -155,7 +157,7 @@ class WebtoonQueryAnswerGenerator:
                 if character_terms:
                     qa_pairs.append({
                         "image_path": page.get('image', ''),
-                        "query": "이 웹툰에 등장하는 인물들과 관련된 용어를 설명해주세요.",
+                        "query": f"이전 상황 : {page['previous_description']}\n\n이 웹툰에 등장하는 인물들과 관련된 용어를 설명해주세요.",
                         "answer": json.dumps(character_terms, ensure_ascii=False, indent=2)
                     })
         
@@ -210,7 +212,7 @@ class WebtoonQueryAnswerGenerator:
                 # 전체 캐릭터 분석 QA
                 qa_pairs.append({
                     "image_path": page.get('image', ''),
-                    "query": "이 웹툰 장면에 등장하는 캐릭터들을 분석해주세요.",
+                    "query": f"이전 상황 : {page['previous_description']}\n\n이 웹툰 장면에 등장하는 캐릭터들을 분석해주세요.",
                     "answer": json.dumps(characters_info, ensure_ascii=False, indent=2)
                 })
                 
@@ -223,7 +225,7 @@ class WebtoonQueryAnswerGenerator:
                 if emotion_analysis:
                     qa_pairs.append({
                         "image_path": page.get('image', ''),
-                        "query": "이 장면에서 캐릭터들의 감정 상태를 분석해주세요.",
+                        "query": f"이전 상황 : {page['previous_description']}\n\n이 장면에서 캐릭터들의 감정 상태를 분석해주세요.",
                         "answer": json.dumps(emotion_analysis, ensure_ascii=False, indent=2)
                     })
                 
@@ -236,7 +238,7 @@ class WebtoonQueryAnswerGenerator:
                 if dialogue_analysis:
                     qa_pairs.append({
                         "image_path": page.get('image', ''),
-                        "query": "이 장면에서 각 캐릭터가 한 대사를 정리해주세요.",
+                        "query": f"이전 상황 : {page['previous_description']}\n\n이 장면에서 각 캐릭터가 한 대사를 정리해주세요.",
                         "answer": json.dumps(dialogue_analysis, ensure_ascii=False, indent=2)
                     })
         
@@ -366,17 +368,17 @@ def create_mixed_training_data(json_path: str, output_path: str = "webtoon_mixed
 # 사용 예시
 if __name__ == "__main__":
     # 기본 사용법
-    json_path = "/workspace/Toonspace_VLM/data/Webtoon_Narrative_Dialogue_building_owner_2_tmp.json"
+    json_path = "/workspace/Toonspace_VLM/data/Webtoon_Narrative_Dialogue_total.json"
     
     # 1. Task별로 분리된 QA 데이터 생성
     print("=== Task별 분리 데이터 생성 ===")
-    stats = create_training_data(json_path, output_dir="/workspace/Toonspace_VLM/data/json_file")
+    stats = create_training_data(json_path, output_dir="/workspace/Toonspace_VLM/data/grok_json_file")
     
     # 2. 균형잡힌 혼합 데이터 생성
     print("\n=== 균형잡힌 혼합 데이터 생성 ===")
     mixed_data = create_mixed_training_data(
         json_path, 
-        output_path="/workspace/Toonspace_VLM/data/json_file/webtoon_balanced_training.json"
+        output_path="/workspace/Toonspace_VLM/data/grok_json_file/webtoon_balanced_training.json"
     )
     
     print("\n=== 생성 완료 ===")

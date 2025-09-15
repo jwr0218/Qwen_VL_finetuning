@@ -30,6 +30,13 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+from accelerate import Accelerator
+
+import wandb
+
+
+
+
 
 
 @dataclass
@@ -37,35 +44,42 @@ class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/json_file/webtoon_balanced_training.json'
-    output_dir: str = "ex_models/toptoon_data"
+    data_path: str = '/workspace/Toonspace_VLM/data/grok_json_file/webtoon_balanced_training.json'
+    output_dir: str = "ex_models/with_previous_toptoon_data_grok"
     
     # 모델 설정
-    model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    # model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    model_id : str = '/workspace/Toonspace_VLM/ex_models/with_previous_toptoon_data_grok/checkpoint-10000'
+    processor_id  : str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
     
     # 데이터 분할 비율
-    train_ratio: float = 0.8
-    eval_ratio: float = 0.1
-    test_ratio: float = 0.1
+    train_ratio: float = 0.95
+    eval_ratio: float = 0.0025
+    test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 3
+    num_train_epochs: int = 2
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 4
     learning_rate: float = 3e-5
-    max_grad_norm: float = 0.3
-    warmup_ratio: float = 0.03
+    max_grad_norm: float = 0.4
+    warmup_ratio: float = 0.1
     
     # 프로세서 설정
     min_pixels: int = 256 * 28 * 28
     max_pixels: int = 960 * 28 * 28
     
     # 로깅 설정
-    logging_steps: int = 10
-    eval_steps: int = 20
-    save_steps: int = 10000
+    logging_steps: int = 100
+    eval_steps: int = 2000
+    save_steps: int = 4000
     early_stopping_patience: int = 15
+
+    #wandb 설정 추기 
+    wandb_project_name: str = "Webtoon-vlm-finetuning"
+
+
     
     # 시스템 메시지
     system_message: str = field(default="""
@@ -93,7 +107,24 @@ class VLMTrainer:
             ]
         )
         self.logger = logging.getLogger(__name__)
+    
+    def setup_environment(self) -> None:
+        """환경 변수 및 분산 훈련 설정"""
+        # NCCL 및 분산 훈련 설정
+        os.environ.setdefault("NCCL_DEBUG", "WARN")
+        os.environ.setdefault("NCCL_P2P_DISABLE", "0")  # P2P 통신 유지
+        os.environ.setdefault("NCCL_IB_DISABLE", "0")   # InfiniBand 유지
         
+        # 분산 훈련 안정성 개선
+        os.environ.setdefault("CUDA_LAUNCH_BLOCKING", "0")
+        os.environ.setdefault("TORCH_DISTRIBUTED_DEBUG", "DETAIL")
+        
+        # FSDP 관련 설정
+        os.environ.setdefault("FSDP_CPU_OFFLOAD", "0")
+        
+        self.logger.info("환경 설정 완료")
+
+
     def clear_memory(self) -> None:
         """안전한 GPU 메모리 정리"""
         gc.collect()
@@ -158,6 +189,7 @@ class VLMTrainer:
                 raise FileNotFoundError(f"데이터 파일을 찾을 수 없습니다: {self.config.data_path}")
             
             dataset = load_dataset('json', data_files=self.config.data_path)
+            dataset['train'] = dataset["train"].shuffle(seed=42)
             total_size = len(dataset["train"])
             
             # 데이터셋 분할 인덱스 계산
@@ -180,8 +212,8 @@ class VLMTrainer:
             self.logger.info(f"  - 테스트 데이터: {len(test_formatted)}개")
             
             # 샘플 데이터 출력
-            if train_formatted:
-                self.logger.info(f"샘플 데이터:\n{train_formatted[0]}")
+            # if train_formatted:
+            #     self.logger.info(f"샘플 데이터:\n{train_formatted[0]}")
             
             return train_formatted, eval_formatted, test_formatted
             
@@ -196,12 +228,13 @@ class VLMTrainer:
             
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 self.config.model_id,
-                device_map="cuda",
-                torch_dtype='auto'
+                # device_map="cuda",
+                torch_dtype=torch.bfloat16, 
+                trust_remote_code = True
             )
-            
+
             self.processor = AutoProcessor.from_pretrained(
-                self.config.model_id,
+                self.config.processor_id,
                 min_pixels=self.config.min_pixels,
                 max_pixels=self.config.max_pixels
             )
@@ -246,7 +279,7 @@ class VLMTrainer:
         return collate_fn
     
     def create_training_args(self) -> SFTConfig:
-        """학습 설정 생성"""
+        """학습 설정 생성 (FSDP 활성화)"""
         return SFTConfig(
             output_dir=self.config.output_dir,
             num_train_epochs=self.config.num_train_epochs,
@@ -265,16 +298,34 @@ class VLMTrainer:
             metric_for_best_model="eval_loss",
             greater_is_better=False,
             load_best_model_at_end=True,
+            # dataloader_pin_memory=False,
+            save_safetensors=True, 
             bf16=True,
+            fp16=False,       
+            bf16_full_eval=True,
             max_grad_norm=self.config.max_grad_norm,
             warmup_ratio=self.config.warmup_ratio,
-            ddp_find_unused_parameters=False,
+            ddp_find_unused_parameters=False,  # FSDP 사용 시 False 권장
             dataloader_num_workers=1,
-            report_to=["none"],
+            report_to=["wandb"],
+            run_name=self.config.wandb_project_name,
             gradient_checkpointing_kwargs={"use_reentrant": False},
             dataset_text_field="",
             dataset_kwargs={"skip_prepare_dataset": True},
-            local_rank=-1
+            local_rank=-1,
+            # FSDP 활성화
+            fsdp="full_shard auto_wrap",
+            fsdp_config={
+                "min_num_params": 0,
+                "xla": False,
+                "xla_fsdp_grad_ckpt": False,
+                "backward_prefetch": "backward_pre",
+                "forward_prefetch": False,
+                "limit_all_gathers": True,
+                "use_orig_params": False,
+                "cpu_offload": False,
+                "sync_module_states": True,  # 중요: 모듈 상태 동기화
+            },
         )
     
     def train(self) -> None:
@@ -325,6 +376,8 @@ class VLMTrainer:
         finally:
             self.clear_memory()
 
+            wandb.finish()
+
 
 def main():
     """메인 실행 함수"""
@@ -336,6 +389,12 @@ def main():
         # 설정 로드
         config = TrainingConfig()
         
+
+        # wandb 초기화
+        wandb.init(project=config.wandb_project_name)
+
+
+
         # 학습 실행
         trainer = VLMTrainer(config)
         trainer.train()

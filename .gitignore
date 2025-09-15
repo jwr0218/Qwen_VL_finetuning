@@ -1,2 +1,4 @@
 *.json
 *.log
+ex_models
+test

@@ -1,0 +1,117 @@
+_wandb:
+    value:
+        cli_version: 0.21.3
+        e:
+            nn6pg08tgpj5olhlgu3p06g6z8dd1qah:
+                codePath: qwen_vision_train.py
+                codePathLocal: qwen_vision_train.py
+                cpu_count: 64
+                cpu_count_logical: 128
+                cudaVersion: "12.9"
+                disk:
+                    /:
+                        total: "451214180352"
+                        used: "377812459520"
+                email: jwr0218@gmail.com
+                executable: /usr/bin/python3
+                git:
+                    commit: 149cf871740fa5ddc274636421b155ffc44a083d
+                    remote: https://github.com/jwr0218/Qwen_VL_finetuning.git
+                gpu: NVIDIA H100 NVL
+                gpu_count: 2
+                gpu_nvidia:
+                    - architecture: Hopper
+                      cudaCores: 16896
+                      memoryTotal: "100485038080"
+                      name: NVIDIA H100 NVL
+                      uuid: GPU-82f1811d-d86f-80da-37ad-4a9ffbaa0cd9
+                    - architecture: Hopper
+                      cudaCores: 16896
+                      memoryTotal: "100485038080"
+                      name: NVIDIA H100 NVL
+                      uuid: GPU-f9b3ada3-3fca-aae5-b7d3-9bdbc6f883e4
+                host: BVH100
+                memory:
+                    total: "540744826880"
+                os: Linux-6.8.0-64-generic-x86_64-with-glibc2.35
+                program: /workspace/Toonspace_VLM/qwen_vision_train.py
+                python: CPython 3.10.12
+                root: /workspace/Toonspace_VLM
+                startedAt: "2025-09-14T08:21:28.341028Z"
+                writerId: nn6pg08tgpj5olhlgu3p06g6z8dd1qah
+        m: []
+        python_version: 3.10.12
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 84
+                - 98
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 84
+                - 98
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.10.12
+            "5": 0.21.3
+            "6": 4.56.0.dev0
+            "12": 0.21.3
+            "13": linux-x86_64
+data_path:
+    value: /workspace/Toonspace_VLM/data/grok_json_file/webtoon_balanced_training.json
+early_stopping_patience:
+    value: 15
+eval_ratio:
+    value: 0.0025
+eval_steps:
+    value: 10
+gradient_accumulation_steps:
+    value: 4
+learning_rate:
+    value: 3e-05
+logging_steps:
+    value: 50
+max_grad_norm:
+    value: 0.4
+max_pixels:
+    value: 752640
+min_pixels:
+    value: 200704
+model_id:
+    value: huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated
+num_train_epochs:
+    value: 3
+output_dir:
+    value: ex_models/with_previous_toptoon_data_grok
+per_device_eval_batch_size:
+    value: 1
+per_device_train_batch_size:
+    value: 1
+save_steps:
+    value: 10
+system_message:
+    value: "\n    당신은 웹툰 이미지 분석 전문가입니다. 성인 웹툰 이미지를 분석하여 장면별로 효과음, 말풍선, 서사적 맥락을 정확히 추출하고, JSON 형식으로 구조화된 결과를 제공합니다. 모든 텍스트 요소(대사, 효과음, 나레이션)를 한국어로 추출하고, 캐릭터 관계와 상황 맥락을 세밀히 분석하며, 오해석을 최소화하십시오\n    "
+test_ratio:
+    value: 0.025
+train_ratio:
+    value: 0.95
+wandb_project_name:
+    value: Webtoon-vlm-finetuning
+warmup_ratio:
+    value: 0.1
