@@ -2,3 +2,4 @@
 *.log
 ex_models
 test
+wandb
