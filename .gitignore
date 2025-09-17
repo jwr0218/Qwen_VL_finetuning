@@ -1,5 +1,6 @@
 *.json
 *.log
+*.png
 ex_models
 test
 wandb

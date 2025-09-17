@@ -73,7 +73,7 @@ class TrainingConfig:
     # 로깅 설정
     logging_steps: int = 100
     eval_steps: int = 2000
-    save_steps: int = 4000
+    save_steps: int = 10000
     early_stopping_patience: int = 15
 
     #wandb 설정 추기 
@@ -257,10 +257,13 @@ class VLMTrainer:
             Returns:
                 배치 딕셔너리 (input_ids, attention_mask, pixel_values, labels)
             """
+            # print(examples)
+            # exit()
             texts = [
                 self.processor.apply_chat_template(example, tokenize=False) 
                 for example in examples
             ]
+
             image_inputs = [process_vision_info(example)[0] for example in examples]
             
             batch = self.processor(

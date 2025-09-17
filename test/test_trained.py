@@ -68,14 +68,6 @@ class WebtoonDataset(Dataset):
 class TaskTypeManager:
     """Task 타입 관련 기능을 관리하는 클래스"""
     
-    SYSTEM_MESSAGES = {
-        "scene_description": "당신은 웹툰 이미지 분석 전문가입니다. 웹툰 이미지를 분석하여 장면의 상황, 맥락, 서사적 흐름을 정확하게 설명하세요.",
-        "text_detection": "당신은 웹툰 이미지 분석 전문가입니다. 웹툰 이미지에서 모든 텍스트 요소를 정확히 인식하고 위치 정보와 함께 추출하세요.",
-        "terminology": "당신은 웹툰 이미지 분석 전문가입니다. 웹툰에서 사용된 특별한 용어들을 식별하고 그 의미를 설명하세요.",
-        "character_analysis": "당신은 웹툰 이미지 분석 전문가입니다. 웹툰 캐릭터들을 분석하여 등장인물 정보와 감정 상태를 파악하세요.",
-        "general": "당신은 웹툰 이미지 분석 전문가입니다. 성인 웹툰 이미지를 분석하여 장면별로 효과음, 말풍선, 서사적 맥락을 정확히 추출하고, JSON 형식으로 구조화된 결과를 제공합니다."
-    }
-    
     @classmethod
     def detect_task_type(cls, query: str) -> str:
         """쿼리에서 자동으로 task 타입을 감지"""
