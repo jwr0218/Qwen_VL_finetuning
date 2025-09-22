@@ -158,6 +158,13 @@ def main():
     
     # 모델과 프로세서를 float16 타입으로 일관성 있게 로드
     processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.float16)
+
+    processor = AutoProcessor.from_pretrained(
+                model_name,
+                min_pixels= 256 * 28 * 28 , 
+                max_pixels=960 * 28 * 28,
+                trust_remote_code=True, torch_dtype=torch.float16)
+
     tokenizer = processor.tokenizer
     model = OCRandDescriptionQwenVL(model_name).to(device).half()
 

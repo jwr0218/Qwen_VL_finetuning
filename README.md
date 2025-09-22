@@ -7,7 +7,10 @@
 # Docker Image
 huggingface/transformers-pytorch-gpu
 
-# 실행 명령
+# 패키지화
+pip install -e . 
+
+# 학습 명령
 sh train_shell.sh
 ```
 

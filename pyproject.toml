@@ -1,0 +1,6 @@
+[project]
+name = "toonspace_vlm"
+version = "0.1.0"
+
+[tool.setuptools]
+packages = ["toonVLM"]
