@@ -8,14 +8,14 @@ import warnings
 # 경고 메시지 무시
 warnings.filterwarnings("ignore")
 
-class OCRandDescriptionQwenVL(nn.Module):
+class Multihead_Toonspace(nn.Module):
     def __init__(self, model_name="Qwen/Qwen2.5-VL-3B-Instruct"):
         super().__init__()
         
         self.qwen_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_name, 
             trust_remote_code=True,
-            torch_dtype=torch.float16
+            torch_dtype=torch.bfloat16
         )
         qwen_config = self.qwen_model.config
         
@@ -62,7 +62,7 @@ class OCRandDescriptionQwenVL(nn.Module):
             {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": 'DES & OCR'}]}
         ]
         prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = processor(text=[prompt], images=[image], return_tensors="pt").to(device, torch.float16)
+        inputs = processor(text=[prompt], images=[image], return_tensors="pt").to(device, torch.bfloat16)
 
         outputs = self.qwen_model(**inputs, output_hidden_states=True, return_dict=True)
         encoder_output = outputs.hidden_states[-1]
@@ -133,14 +133,14 @@ class OCRandDescriptionQwenVL(nn.Module):
         ocr_instruction = "What text is written in the image? Transcribe it accurately."
         ocr_messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": ocr_instruction}]}]
         ocr_prompt = processor.apply_chat_template(ocr_messages, tokenize=False, add_generation_prompt=True)
-        ocr_inputs = processor(text=[ocr_prompt], images=[image], return_tensors="pt").to(device, torch.float16)
+        ocr_inputs = processor(text=[ocr_prompt], images=[image], return_tensors="pt").to(device, torch.bfloat16)
         ocr_encoder_output = self.qwen_model(**ocr_inputs, output_hidden_states=True).hidden_states[-1]
         
         # 2. Description 태스크를 위한 명확한 Instruction 주입
         desc_instruction = "Describe the contents of this image in detail."
         desc_messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": desc_instruction}]}]
         desc_prompt = processor.apply_chat_template(desc_messages, tokenize=False, add_generation_prompt=True)
-        desc_inputs = processor(text=[desc_prompt], images=[image], return_tensors="pt").to(device, torch.float16)
+        desc_inputs = processor(text=[desc_prompt], images=[image], return_tensors="pt").to(device, torch.bfloat16)
         desc_encoder_output = self.qwen_model(**desc_inputs, output_hidden_states=True).hidden_states[-1]
         
         # 3. 각 헤드에서 Instruction 기반의 결과 생성
@@ -157,16 +157,16 @@ def main():
     print(f"디바이스: {device} | 모델: {model_name}\n")
     
     # 모델과 프로세서를 float16 타입으로 일관성 있게 로드
-    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.float16)
+    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16)
 
     processor = AutoProcessor.from_pretrained(
                 model_name,
                 min_pixels= 256 * 28 * 28 , 
                 max_pixels=960 * 28 * 28,
-                trust_remote_code=True, torch_dtype=torch.float16)
+                trust_remote_code=True, torch_dtype=torch.bfloat16)
 
     tokenizer = processor.tokenizer
-    model = OCRandDescriptionQwenVL(model_name).to(device).half()
+    model = Multihead_Toonspace(model_name).to(device).half()
 
     # --- 데이터 준비 ---
     image_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
