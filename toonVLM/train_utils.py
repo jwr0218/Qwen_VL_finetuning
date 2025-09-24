@@ -38,50 +38,49 @@ class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/grok_json_file/webtoon_balanced_training.json'
-    output_dir: str = "ex_models/with_previous_toptoon_data_grok"
+    data_path: str 
+    output_dir: str 
     
     # 모델 설정
-    model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    model_id: str 
     
     # 데이터 분할 비율
-    train_ratio: float = 0.8
-    eval_ratio: float = 0.1
-    test_ratio: float = 0.1
+    train_ratio: float
+    eval_ratio: float 
+    test_ratio: float 
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 3
-    per_device_train_batch_size: int = 1
-    per_device_eval_batch_size: int = 1
-    gradient_accumulation_steps: int = 32
-    learning_rate: float = 3e-5
-    max_grad_norm: float = 0.4
-    warmup_ratio: float = 0.1
+    num_train_epochs: int 
+    per_device_train_batch_size: int 
+    per_device_eval_batch_size: int 
+    gradient_accumulation_steps: int
+    learning_rate: float
+    max_grad_norm: float
+    warmup_ratio: float
     
     # 프로세서 설정
-    min_pixels: int = 256 * 28 * 28
-    max_pixels: int = 960 * 28 * 28
+    min_pixels: int
+    max_pixels: int 
     
     # 로깅 설정
-    logging_steps: int = 50
-    eval_steps: int = 1000
-    save_steps: int = 1000
-    early_stopping_patience: int = 15
+    logging_steps: int 
+    eval_steps: int 
+    save_steps: int 
+    early_stopping_patience: int
     
     # 시스템 메시지
-    system_message: str = field(default="""
-    당신은 웹툰 이미지 분석 전문가입니다. 성인 웹툰 이미지를 분석하여 장면별로 효과음, 말풍선, 서사적 맥락을 정확히 추출하고, JSON 형식으로 구조화된 결과를 제공합니다. 모든 텍스트 요소(대사, 효과음, 나레이션)를 한국어로 추출하고, 캐릭터 관계와 상황 맥락을 세밀히 분석하며, 오해석을 최소화하십시오
-    """)
+    system_message: str 
 
 
 class VLMTrainer:
     """Vision Language Model 파인튜닝을 위한 메인 클래스"""
     
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: TrainingConfig, model = None, processor = None):
         self.config = config
         self.setup_logging()
-        self.model = None
-        self.processor = None
+        self.model = model
+        self.processor = processor
+        self.tokenizer = processor.tokenizer
         # Accelerator 초기화
         self.accelerator = Accelerator()
         
@@ -173,21 +172,21 @@ class VLMTrainer:
             eval_dataset = dataset["train"].select(range(train_size, train_size + eval_size))
             test_dataset = dataset["train"].select(range(train_size + eval_size, train_size + eval_size * 2))
             
-            # 데이터 포맷팅
-            train_formatted = [self.format_data(sample) for sample in train_dataset]
-            eval_formatted = [self.format_data(sample) for sample in eval_dataset]
-            test_formatted = [self.format_data(sample) for sample in test_dataset]
+            # # 데이터 포맷팅
+            # train_formatted = [self.format_data(sample) for sample in train_dataset]
+            # eval_formatted = [self.format_data(sample) for sample in eval_dataset]
+            # test_formatted = [self.format_data(sample) for sample in test_dataset]
             
-            self.logger.info(f"데이터셋 로드 완료:")
-            self.logger.info(f"  - 학습 데이터: {len(train_formatted)}개")
-            self.logger.info(f"  - 검증 데이터: {len(eval_formatted)}개") 
-            self.logger.info(f"  - 테스트 데이터: {len(test_formatted)}개")
+            # self.logger.info(f"데이터셋 로드 완료:")
+            # self.logger.info(f"  - 학습 데이터: {len(train_formatted)}개")
+            # self.logger.info(f"  - 검증 데이터: {len(eval_formatted)}개") 
+            # self.logger.info(f"  - 테스트 데이터: {len(test_formatted)}개")
             
             # 샘플 데이터 출력
             # if train_formatted and self.accelerator.is_main_process:
                 # self.logger.info(f"샘플 데이터:\n{train_formatted[0]}")
             
-            return train_formatted, eval_formatted, test_formatted
+            return train_dataset , eval_dataset, test_dataset
             
         except Exception as e:
             self.logger.error(f"데이터셋 로드 중 오류 발생: {e}")
@@ -198,17 +197,25 @@ class VLMTrainer:
         try:
             self.logger.info(f"모델 로드 시작: {self.config.model_id}")
             
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                self.config.model_id,
-                # device_map="auto",  # `accelerate`가 device_map을 자동 관리
-                torch_dtype=torch.bfloat16
-            )
-            
-            self.processor = AutoProcessor.from_pretrained(
-                self.config.model_id,
-                min_pixels=self.config.min_pixels,
-                max_pixels=self.config.max_pixels
-            )
+            if self.model is None:
+
+                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    self.config.model_id,
+                    # device_map="auto",  # `accelerate`가 device_map을 자동 관리
+                    torch_dtype=torch.bfloat16
+                )
+            else:
+                print('prameter model이 업로드 되었습니다.\n')
+            if self.processor is None:
+
+                self.processor = AutoProcessor.from_pretrained(
+                    self.config.model_id,
+                    min_pixels=self.config.min_pixels,
+                    max_pixels=self.config.max_pixels
+                )
+
+            else:
+                print('prameter processor가 업로드 되었습니다.\n')
             
             self.logger.info("모델 및 프로세서 로드 완료")
             
@@ -269,12 +276,12 @@ class VLMTrainer:
             
             # 데이터 로드
             train_dataset, eval_dataset, test_dataset_list = self.load_and_split_dataset()
-            # train_dataset = Dataset.from_list(train_dataset_list)
-            # eval_dataset = Dataset.from_list(eval_dataset_list)
-            
+            print(train_dataset[0])            
+            exit()
             # 모델 및 옵티마이저 로드
             self.load_model_and_processor()
-            optimizer = torch.optim.Adafactor(self.model.parameters(), lr=self.config.learning_rate)
+
+            optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.learning_rate)
             
             # 데이터 콜레이터 생성
             collate_fn = self.create_collate_fn()
@@ -304,30 +311,59 @@ class VLMTrainer:
             for epoch in range(self.config.num_train_epochs):
                 self.model.train()
                 for step, batch in enumerate(train_dataloader):
-                    with self.accelerator.accumulate(self.model):
+                    # 그래디언트 초기화를 먼저 수행
+                    optimizer.zero_grad()
+                    
+                    # autocast 사용 (GPU에서만 활성화)
+                    print(batch)
+                    exit()
+                    with torch.cuda.amp.autocast(enabled=(self.accelerator.device.type == 'cuda'), dtype=torch.bfloat16):
                         outputs = self.model(**batch)
                         loss = outputs.loss
+                        total_loss = model(
+                            image=image,
+                            ocr_labels=ocr_labels,
+                            desc_labels=desc_labels,
+                            processor=self.processor,
+                            tokenizer=self.tokenizer
+                        )
+                    
+                    self.logger.info(f"Epoch {epoch+1}, Step {step+1}, Loss: {loss.item():.4f}")
+                    
+                    # NaN 체크 후 역전파 수행
+                    if not torch.isnan(loss):
+                        # accelerator를 사용한 역전파
                         self.accelerator.backward(loss)
                         
+                        # 그래디언트 클리핑
                         if self.accelerator.sync_gradients:
-                            self.accelerator.clip_grad_norm_(self.model.parameters(), self.config.max_grad_norm)
+                            self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                         
+                        # 옵티마이저 스텝 실행
                         optimizer.step()
-                        optimizer.zero_grad()
-                        
-                        # if self.accelerator.is_main_process and step % self.config.logging_steps == 0:
-                        self.logger.info(f"Epoch {epoch+1}, Step {step}, Loss: {loss.item():.4f}")
-                        
+                    else:
+                        self.logger.warning(f"손실이 NaN이므로 Epoch {epoch+1}, Step {step+1}을 건너뜁니다.")
+                        continue
+                
                 # 평가 루프
                 self.model.eval()
                 eval_loss = 0
+                eval_steps = 0
+                
                 for batch in eval_dataloader:
                     with torch.no_grad():
-                        outputs = self.model(**batch)
-                        eval_loss += outputs.loss.item()
+                        # autocast를 평가에도 적용
+                        with torch.cuda.amp.autocast(enabled=(self.accelerator.device.type == 'cuda'), dtype=torch.bfloat16):
+                            outputs = self.model(**batch)
+                            if not torch.isnan(outputs.loss):
+                                eval_loss += outputs.loss.item()
+                                eval_steps += 1
                 
-                avg_eval_loss = eval_loss / len(eval_dataloader)
-                self.logger.info(f"Epoch {epoch+1}, Avg Eval Loss: {avg_eval_loss:.4f}")
+                if eval_steps > 0:
+                    avg_eval_loss = eval_loss / eval_steps
+                    self.logger.info(f"Epoch {epoch+1}, Avg Eval Loss: {avg_eval_loss:.4f}")
+                else:
+                    self.logger.warning(f"Epoch {epoch+1}: 모든 평가 배치에서 NaN 손실 발생")
             
             # 메인 프로세스에서만 모델 저장
             self.accelerator.wait_for_everyone()
