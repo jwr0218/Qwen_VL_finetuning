@@ -51,7 +51,7 @@ class Multihead_Toonspace(nn.Module):
         )
         self.desc_output_layer = nn.Linear(qwen_config.hidden_size, qwen_config.vocab_size )
 
-    def forward(self, image, ocr_labels, desc_labels, processor, tokenizer):
+    def forward(self, image, previous_desc , ocr_labels, desc_labels, processor, tokenizer):
         if not self.training:
             raise ValueError("forward() is only for training. Use generate() for inference.")
             
@@ -59,7 +59,7 @@ class Multihead_Toonspace(nn.Module):
 
         
         messages = [
-            {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": 'DES & OCR'}]}
+            {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": f'previous_desc : {previous_desc}\nDES & OCR'}]}
         ]
         prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = processor(text=[prompt], images=[image], return_tensors="pt").to(device, torch.bfloat16)

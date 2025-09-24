@@ -20,7 +20,11 @@ def extract_webtoon_data(input_data):
         # 기본 정보 추출
         image_path = item.get('image', '')
         description = item.get('overall_description', {}).get('text', '')
-        
+        try:
+
+            previous_desc = item.get('previous_description', {}).get('text', '')
+        except : 
+            previous_desc = '[Empty]'
         # OCR 데이터를 문자열로 결합
         ocr_texts = []
         scene_data = item.get('scene', {})
@@ -50,7 +54,9 @@ def extract_webtoon_data(input_data):
         
         # 결과 딕셔너리 생성
         extracted_item = {
+            
             "image": image_path,
+            'previous_desc' : previous_desc , 
             "OCR": answer1,
             "DESCRIPTION": description
         }

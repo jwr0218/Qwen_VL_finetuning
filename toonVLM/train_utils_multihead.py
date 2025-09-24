@@ -201,11 +201,14 @@ class VLMTrainer:
             # OCR과 DESCRIPTION 텍스트 추출
             ocr_texts = [example.get('OCR', '') for example in examples]
             desc_texts = [example.get('DESCRIPTION', '') for example in examples]
+            pre_desc_texts = [example.get('previous_desc', '') for example in examples]
             ocr_labels = self.tokenizer(ocr_texts[0], return_tensors='pt', padding='max_length', max_length=30, truncation=True).input_ids#.to(device)
             desc_labels = self.tokenizer(desc_texts[0], return_tensors='pt', padding='max_length', max_length=30, truncation=True).input_ids#.to(device)
+            pre_desc_labels = self.tokenizer(pre_desc_texts[0], return_tensors='pt', padding='max_length', max_length=30, truncation=True).input_ids#.to(device)
             # 배치 딕셔너리 생성
             batch = {
                 "image": image,           # List[PIL.Image]
+                'previous_desc' : pre_desc_labels , 
                 "ocr": ocr_labels,         # List[str]  
                 "desc": desc_labels         # List[str]
             }
@@ -263,11 +266,12 @@ class VLMTrainer:
                     optimizer.zero_grad()
                     
                     # autocast 사용 (GPU에서만 활성화)
-                    print(batch)
+                    print(batch.keys())
                     with torch.cuda.amp.autocast(enabled=(self.accelerator.device.type == 'cuda'), dtype=torch.bfloat16):
                         
                         total_loss = self.model(
                             image=batch['image'],
+                            previous_desc = batch['previous_desc'],
                             ocr_labels=batch['ocr'],
                             desc_labels=batch['desc'],
                             processor=self.processor,
