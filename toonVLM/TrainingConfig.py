@@ -8,7 +8,7 @@ class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/output.json'
+    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/output_2head.json'
     output_dir: str = "ex_models/with_previous_toptoon_data_grok"
     
     # 모델 설정
@@ -22,7 +22,7 @@ class TrainingConfig:
     test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 2
+    num_train_epochs: int = 10
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 4

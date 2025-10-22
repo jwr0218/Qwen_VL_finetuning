@@ -24,7 +24,7 @@ from rouge_score import rouge_scorer
 @dataclass
 class EvaluationConfig:
     """평가 설정을 관리하는 데이터클래스"""
-    checkpoint_path: str = "/workspace/Toonspace_VLM/ex_models/qwen25-7b-Webtoon_Analysis"
+    checkpoint_path: str = "/workspace/Toonspace_VLM/ex_models/at_once_ocr_description"
     batch_size: int = 8
     max_new_tokens: int = 128
     do_sample: bool = True
@@ -399,7 +399,7 @@ def main():
     config = EvaluationConfig()
     
     # 데이터 로드
-    webtoon_path = '/workspace/Toonspace_VLM/data/json_file/webtoon_balanced_training.json'
+    webtoon_path = '/workspace/Toonspace_VLM/data/ocr_description/OCR_DESCRIPTION.json'
     raw_data = DataLoader.load_webtoon_data(webtoon_path)
     
     # 데이터 분할

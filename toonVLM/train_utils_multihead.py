@@ -32,6 +32,8 @@ from transformers import (
 )
 from accelerate import Accelerator, PartialState
 from toonVLM.TrainingConfig import TrainingConfig
+from tqdm.auto import tqdm
+
 
 class VLMTrainer:
     """Vision Language Model 파인튜닝을 위한 메인 클래스"""
@@ -231,7 +233,6 @@ class VLMTrainer:
             
             # 모델 및 옵티마이저 로드
             self.load_model_and_processor()
-
             optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.learning_rate)
             
             # 데이터 콜레이터 생성
@@ -261,25 +262,31 @@ class VLMTrainer:
             # 커스텀 학습 루프
             for epoch in range(self.config.num_train_epochs):
                 self.model.train()
-                for step, batch in enumerate(train_dataloader):
+                print(f'EPOCH : \t{epoch}')
+                for step, batch in enumerate(tqdm(train_dataloader)):
                     # 그래디언트 초기화를 먼저 수행
                     optimizer.zero_grad()
                     
                     # autocast 사용 (GPU에서만 활성화)
-                    print(batch.keys())
+                    # print(batch.keys())
                     with torch.cuda.amp.autocast(enabled=(self.accelerator.device.type == 'cuda'), dtype=torch.bfloat16):
-                        
-                        total_loss = self.model(
-                            image=batch['image'],
-                            previous_desc = batch['previous_desc'],
-                            ocr_labels=batch['ocr'],
-                            desc_labels=batch['desc'],
-                            processor=self.processor,
-                            tokenizer=self.tokenizer
-                        )
+                        try:
 
-                    
-                    self.logger.info(f"Epoch {epoch+1}, Step {step+1}, Loss: {total_loss.item():.4f}")
+                            total_loss = self.model(
+                                image=batch['image'],
+                                previous_desc = batch['previous_desc'],
+                                ocr_labels=batch['ocr'],
+                                desc_labels=batch['desc'],
+                                processor=self.processor,
+                                tokenizer=self.tokenizer
+                            )
+                        except torch.OutOfMemoryError as e: 
+                                print(e)
+                                print('\n\n 에러 발생  - 컨티뉴 합니다.')
+                                continue
+
+                    if step % self.config.logging_steps == 0 :
+                        self.logger.info(f"Epoch {epoch+1}, Step {step+1}, Loss: {total_loss.item():.4f}")
                     
                     # NaN 체크 후 역전파 수행
                     if not torch.isnan(total_loss):
@@ -292,6 +299,7 @@ class VLMTrainer:
                         
                         # 옵티마이저 스텝 실행
                         optimizer.step()
+                        optimizer.zero_grad()
                     else:
                         self.logger.warning(f"손실이 NaN이므로 Epoch {epoch+1}, Step {step+1}을 건너뜁니다.")
                         continue
@@ -305,7 +313,9 @@ class VLMTrainer:
                     with torch.no_grad():
                         # autocast를 평가에도 적용
                         with torch.cuda.amp.autocast(enabled=(self.accelerator.device.type == 'cuda'), dtype=torch.bfloat16):
+                            
                             outputs = self.model(**batch)
+                            
                             if not torch.isnan(outputs.loss):
                                 eval_loss += outputs.loss.item()
                                 eval_steps += 1

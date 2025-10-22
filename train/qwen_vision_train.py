@@ -44,21 +44,21 @@ class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/grok_json_file/webtoon_balanced_training.json'
-    output_dir: str = "ex_models/with_previous_toptoon_data_grok"
+    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/OCR_DESCRIPTION.json'
+    output_dir: str = "ex_models/at_once_ocr_description"
     
     # 모델 설정
-    # model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
-    model_id : str = '/workspace/Toonspace_VLM/ex_models/with_previous_toptoon_data_grok/checkpoint-10000'
+    model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    # model_id : str = '/workspace/Toonspace_VLM/ex_models/OCR'
     processor_id  : str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
     
     # 데이터 분할 비율
     train_ratio: float = 0.95
-    eval_ratio: float = 0.0025
+    eval_ratio: float = 0.025
     test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 2
+    num_train_epochs: int = 10
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 4
@@ -72,12 +72,12 @@ class TrainingConfig:
     
     # 로깅 설정
     logging_steps: int = 100
-    eval_steps: int = 2000
-    save_steps: int = 10000
+    eval_steps: int = 500
+    save_steps: int = 100000
     early_stopping_patience: int = 15
 
     #wandb 설정 추기 
-    wandb_project_name: str = "Webtoon-vlm-finetuning"
+    wandb_project_name: str = "Webtoon-vlm-OCR-OCR&Description"
 
 
     
@@ -200,7 +200,17 @@ class VLMTrainer:
             train_dataset = dataset["train"].select(range(0, train_size))
             eval_dataset = dataset["train"].select(range(train_size, train_size + eval_size))
             test_dataset = dataset["train"].select(range(train_size + eval_size, train_size + eval_size * 2))
+            filtered_dataset = dataset.filter(lambda x: x["query"] in ['OCR&BBOX'])['train'].to_pandas()
+
+            # print(filtered_dataset)
+            # # test_dataset을 별도 JSON 파일로 저장
+            # output_test_file = "OCR_test_dataset.json" # 원하는 파일명으로 변경
+            # filtered_dataset.to_json(output_test_file, orient="records", lines=False)
             
+            # print(f"테스트 데이터셋이 {output_test_file}에 저장되었습니다. (샘플 수: {len(filtered_dataset)})")
+            # print('check')
+            # exit()
+
             # 데이터 포맷팅
             train_formatted = [self.format_data(sample) for sample in train_dataset]
             eval_formatted = [self.format_data(sample) for sample in eval_dataset]

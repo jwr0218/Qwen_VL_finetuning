@@ -56,18 +56,18 @@ def extract_webtoon_data_separated(input_data):
         # OCR&BBOX 데이터 생성 (OCR 데이터가 있는 경우만)
         if ocr_label.strip():
             ocr_item = {
-                "image": image_path,
+                "image_path": image_path,
                 "query": "OCR&BBOX",
-                "label": ocr_label
+                "answer": ocr_label
             }
             result.append(ocr_item)
         
         # Description 데이터 생성 (설명이 있는 경우만)
         if description.strip():
             desc_item = {
-                "image": image_path,
+                "image_path": image_path,
                 "query": f"previous : {previous_desc} \n order : Description",
-                "label": description
+                "answer": description
             }
             result.append(desc_item)
     
@@ -130,9 +130,9 @@ def preview_data_structure(input_file_path, num_samples=3):
         print("=== 변환된 데이터 구조 미리보기 ===")
         for i, item in enumerate(extracted_data):
             print(f"\n[항목 {i+1}]")
-            print(f"image: {item['image']}")
+            print(f"image: {item['image_path']}")
             print(f"query: {item['query']}")
-            print(f"label: {item['label'][:100]}..." if len(item['label']) > 100 else f"label: {item['label']}")
+            print(f"label: {item['answer'][:100]}..." if len(item['answer']) > 100 else f"answer: {item['answer']}")
             print("-" * 50)
             
     except Exception as e:
@@ -142,7 +142,7 @@ def preview_data_structure(input_file_path, num_samples=3):
 # 예시 사용법
 if __name__ == "__main__":
     input_path = "/workspace/Toonspace_VLM/data/Webtoon_Narrative_Dialogue_total.json"
-    output_path = "ocr_description/output_separated.json"
+    output_path = "ocr_description/OCR_DESCRIPTION.json"
     
     # 데이터 구조 미리보기
     print("데이터 구조를 먼저 확인합니다...")
