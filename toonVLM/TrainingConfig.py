@@ -7,14 +7,15 @@ import torch
 class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
+    
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/output_2head.json'
+    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/total(bbox_normal)_ocr_dataset.json'
     output_dir: str = "ex_models/with_previous_toptoon_data_grok"
     
     # 모델 설정
-    model_id: str = "huihui-ai/Qwen2.5-VL-3B-Instruct-abliterated"
+    model_id: str = "/DATA/model_weights/abliterated/qwen2.5-vl-7b"
     # model_id : str = '/workspace/Toonspace_VLM/ex_models/with_previous_toptoon_data_grok/checkpoint-10000'
-    processor_id  : str = "huihui-ai/Qwen2.5-VL-3B-Instruct-abliterated"
+    processor_id  : str = "/DATA/model_weights/abliterated/qwen2.5-vl-7b"
     
     # 데이터 분할 비율
     train_ratio: float = 0.95
@@ -23,13 +24,20 @@ class TrainingConfig:
     
     # 학습 하이퍼파라미터
     num_train_epochs: int = 10
-    per_device_train_batch_size: int = 1
-    per_device_eval_batch_size: int = 1
+    per_device_train_batch_size: int = 2
+    per_device_eval_batch_size: int = 2
     gradient_accumulation_steps: int = 4
     learning_rate: float = 3e-5
     max_grad_norm: float = 0.4
     warmup_ratio: float = 0.1
     
+    # Multi_head 적용
+    multihead: bool = False
+
+    # BE 적용
+    apply_back_extension: bool = False  # <<< Back Extension 적용 여부
+    target_layers: int = 36          # <<< 목표 레이어 수 (예: 36)
+
     # 프로세서 설정
     min_pixels: int = 256 * 28 * 28
     max_pixels: int = 960 * 28 * 28
@@ -45,7 +53,7 @@ class TrainingConfig:
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
+    
     
     # 시스템 메시지
     system_message: str = field(default="""

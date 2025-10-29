@@ -491,7 +491,7 @@ def main():
     parser.add_argument('--mode', type=str, default='evaluate', choices=['predict', 'evaluate'])
     parser.add_argument('--model_path', type=str, default='/workspace/Toonspace_VLM/ex_models/at_once_ocr_description')
     parser.add_argument('--base_model_id', type=str, default='huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated')
-    parser.add_argument('--image_folder', type=str, default='/workspace/Toonspace_VLM/data/test_image/escape_home/01')
+    parser.add_argument('--image_folder', type=str, default='/workspace/Toonspace_VLM/ex_models/OCR_visual_prompting')
     parser.add_argument('--test_data_path', type=str, default='/workspace/Toonspace_VLM/test/OCR_test_dataset.json')
     parser.add_argument('--output_dir', type=str, default='results')
     parser.add_argument('--use_context', action=argparse.BooleanOptionalAction, default=True)

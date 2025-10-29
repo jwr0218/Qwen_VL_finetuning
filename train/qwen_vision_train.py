@@ -44,8 +44,8 @@ class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/OCR_DESCRIPTION.json'
-    output_dir: str = "ex_models/at_once_ocr_description"
+    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/total(bbox_normal)_ocr_dataset.json'
+    output_dir: str = "ex_models/OCR_visual_prompting"
     
     # 모델 설정
     model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
@@ -58,7 +58,7 @@ class TrainingConfig:
     test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 10
+    num_train_epochs: int = 7
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 4
@@ -74,10 +74,10 @@ class TrainingConfig:
     logging_steps: int = 100
     eval_steps: int = 500
     save_steps: int = 100000
-    early_stopping_patience: int = 15
+    early_stopping_patience: int = 10
 
     #wandb 설정 추기 
-    wandb_project_name: str = "Webtoon-vlm-OCR-OCR&Description"
+    wandb_project_name: str = "Webtoon-vlm-OCR-Visual-prompting"
 
 
     
@@ -200,7 +200,11 @@ class VLMTrainer:
             train_dataset = dataset["train"].select(range(0, train_size))
             eval_dataset = dataset["train"].select(range(train_size, train_size + eval_size))
             test_dataset = dataset["train"].select(range(train_size + eval_size, train_size + eval_size * 2))
-            filtered_dataset = dataset.filter(lambda x: x["query"] in ['OCR&BBOX'])['train'].to_pandas()
+            test_dataset.to_json("test_data.json", orient="records", lines=True)
+
+            print("test_dataset이 'test_data.json' 파일로 저장되었습니다.")
+
+            # filtered_dataset = dataset.filter(lambda x: x["query"] in ['OCR&BBOX'])['train'].to_pandas()
 
             # print(filtered_dataset)
             # # test_dataset을 별도 JSON 파일로 저장

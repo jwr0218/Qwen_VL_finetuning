@@ -33,49 +33,58 @@ from transformers import (
 from accelerate import Accelerator, PartialState
 
 
-@dataclass
-class TrainingConfig:
-    """학습 설정을 관리하는 데이터클래스"""
+from toonVLM.back_expansion import  apply_back_extension_with_freeze
+from toonVLM.TrainingConfig import TrainingConfig
+
+# @dataclass
+# class TrainingConfig:
+#     """학습 설정을 관리하는 데이터클래스"""
     
-    # 데이터 경로
-    data_path: str 
-    output_dir: str 
+#     # 데이터 경로
+#     data_path: str 
+#     output_dir: str 
     
-    # 모델 설정
-    model_id: str 
+#     # 모델 설정
+#     model_id: str 
     
-    # 데이터 분할 비율
-    train_ratio: float
-    eval_ratio: float 
-    test_ratio: float 
+#     # 데이터 분할 비율
+#     train_ratio: float
+#     eval_ratio: float 
+#     test_ratio: float 
     
-    # 학습 하이퍼파라미터
-    num_train_epochs: int 
-    per_device_train_batch_size: int 
-    per_device_eval_batch_size: int 
-    gradient_accumulation_steps: int
-    learning_rate: float
-    max_grad_norm: float
-    warmup_ratio: float
+#     # 학습 하이퍼파라미터
+#     num_train_epochs: int 
+#     per_device_train_batch_size: int 
+#     per_device_eval_batch_size: int 
+#     gradient_accumulation_steps: int
+#     learning_rate: float
+#     max_grad_norm: float
+#     warmup_ratio: float
     
-    # 프로세서 설정
-    min_pixels: int
-    max_pixels: int 
+#     # 프로세서 설정
+#     min_pixels: int
+#     max_pixels: int 
     
-    # 로깅 설정
-    logging_steps: int 
-    eval_steps: int 
-    save_steps: int 
-    early_stopping_patience: int
+#     # 로깅 설정
+#     logging_steps: int 
+#     eval_steps: int 
+#     save_steps: int 
+#     early_stopping_patience: int
     
-    # 시스템 메시지
-    system_message: str 
+#     # 시스템 메시지
+#     system_message: str 
+
+#     apply_back_extension: bool = True  # <<< Back Extension 적용 여부
+#     target_layers: int = 36          # <<< 목표 레이어 수 (예: 36)
+
+    
 
 
 class VLMTrainer:
     """Vision Language Model 파인튜닝을 위한 메인 클래스"""
     
-    def __init__(self, config: TrainingConfig, model = None, processor = None):
+    def __init__(self, config: TrainingConfig, model = None, processor = None,optimizer = None):
+        self.optimizer = optimizer
         self.config = config
         self.setup_logging()
         self.model = model
@@ -173,9 +182,9 @@ class VLMTrainer:
             test_dataset = dataset["train"].select(range(train_size + eval_size, train_size + eval_size * 2))
             
             # # 데이터 포맷팅
-            # train_formatted = [self.format_data(sample) for sample in train_dataset]
-            # eval_formatted = [self.format_data(sample) for sample in eval_dataset]
-            # test_formatted = [self.format_data(sample) for sample in test_dataset]
+            train_formatted = [self.format_data(sample) for sample in train_dataset]
+            eval_formatted = [self.format_data(sample) for sample in eval_dataset]
+            test_formatted = [self.format_data(sample) for sample in test_dataset]
             
             # self.logger.info(f"데이터셋 로드 완료:")
             # self.logger.info(f"  - 학습 데이터: {len(train_formatted)}개")
@@ -186,7 +195,7 @@ class VLMTrainer:
             # if train_formatted and self.accelerator.is_main_process:
                 # self.logger.info(f"샘플 데이터:\n{train_formatted[0]}")
             
-            return train_dataset , eval_dataset, test_dataset
+            return train_formatted , eval_formatted, test_formatted
             
         except Exception as e:
             self.logger.error(f"데이터셋 로드 중 오류 발생: {e}")
@@ -235,10 +244,24 @@ class VLMTrainer:
             Returns:
                 배치 딕셔너리 (input_ids, attention_mask, pixel_values, labels)
             """
+
+            # formatted_examples = [self.format_data(sample) for sample in examples]
+
+
             texts = [
                 self.processor.apply_chat_template(example, tokenize=False) 
                 for example in examples
             ]
+            # print('\n\nexamples:::')
+            # print(examples)
+            # print('examples:::\n\n')
+
+            # print('\n\ntexts:::')
+            # print(texts)
+            # print('texts:::\n\n')
+
+
+            # exit()
             # print('===============================================\n\n')
             # print(examples[0]['conversation'])
             # print(type(examples[0]['conversation']))
@@ -248,6 +271,7 @@ class VLMTrainer:
             # print(type(examples[0]['conversation'][0]))
 
             # print('===============================================\n\n')
+            # image_inputs = [process_vision_info(example)[0] for example in examples]
             image_inputs = [process_vision_info(example)[0] for example in examples]
             
             batch = self.processor(
@@ -276,12 +300,12 @@ class VLMTrainer:
             
             # 데이터 로드
             train_dataset, eval_dataset, test_dataset_list = self.load_and_split_dataset()
-            print(train_dataset[0])            
-            exit()
+            # print(train_dataset[0])            
+            # exit()
             # 모델 및 옵티마이저 로드
             self.load_model_and_processor()
 
-            optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.learning_rate)
+            optimizer = self.optimizer
             
             # 데이터 콜레이터 생성
             collate_fn = self.create_collate_fn()
@@ -315,35 +339,39 @@ class VLMTrainer:
                     optimizer.zero_grad()
                     
                     # autocast 사용 (GPU에서만 활성화)
-                    print(batch)
-                    exit()
+                    # print(batch)
+                    # exit()
                     with torch.cuda.amp.autocast(enabled=(self.accelerator.device.type == 'cuda'), dtype=torch.bfloat16):
                         outputs = self.model(**batch)
                         loss = outputs.loss
-                        total_loss = model(
-                            image=image,
-                            ocr_labels=ocr_labels,
-                            desc_labels=desc_labels,
-                            processor=self.processor,
-                            tokenizer=self.tokenizer
-                        )
+                        # total_loss = self.model(
+                        #     image=image,
+                        #     ocr_labels=ocr_labels,
+                        #     desc_labels=desc_labels,
+                        #     processor=self.processor,
+                        #     tokenizer=self.tokenizer
+                        # )
+                    loss.backward()
+                    optimizer.step()
+                    if step % self.config.logging_steps == 0 : 
+                        print(f"Epoch: {epoch}, Step: {step}, Loss: {loss.item()}")
+
+                    # self.logger.info(f"Epoch {epoch+1}, Step {step+1}, Loss: {loss.item():.4f}")
                     
-                    self.logger.info(f"Epoch {epoch+1}, Step {step+1}, Loss: {loss.item():.4f}")
-                    
-                    # NaN 체크 후 역전파 수행
-                    if not torch.isnan(loss):
-                        # accelerator를 사용한 역전파
-                        self.accelerator.backward(loss)
+                    # # NaN 체크 후 역전파 수행
+                    # if not torch.isnan(loss):
+                    #     # accelerator를 사용한 역전파
+                    #     self.accelerator.backward(loss)
                         
-                        # 그래디언트 클리핑
-                        if self.accelerator.sync_gradients:
-                            self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    #     # 그래디언트 클리핑
+                    #     if self.accelerator.sync_gradients:
+                    #         self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                         
-                        # 옵티마이저 스텝 실행
-                        optimizer.step()
-                    else:
-                        self.logger.warning(f"손실이 NaN이므로 Epoch {epoch+1}, Step {step+1}을 건너뜁니다.")
-                        continue
+                    #     # 옵티마이저 스텝 실행
+                    #     optimizer.step()
+                    # else:
+                    #     self.logger.warning(f"손실이 NaN이므로 Epoch {epoch+1}, Step {step+1}을 건너뜁니다.")
+                    #     continue
                 
                 # 평가 루프
                 self.model.eval()
