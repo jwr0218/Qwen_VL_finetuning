@@ -5,7 +5,7 @@ Vision Language Model 예측 및 평가 통합 스크립트 (웹툰 순차 추�
 'predict' 모드에서는 웹툰 이미지를 순차적으로 분석하며 컨텍스트를 누적 처리하고,
 'evaluate' 모드에서는 테스트 데이터셋을 사용하여 텍스트 생성 및 OCR/Detection 성능을 평가합니다.
 
-작성자: Assistant
+작성자: WR jeong
 Year: 2025
 Month: 9
 Day: 17
@@ -37,6 +37,10 @@ from tqdm import tqdm
 from transformers import (AutoProcessor,
                           Qwen2_5_VLForConditionalGeneration)
 
+from ultralytics import YOLO
+import cv2
+import random
+
 # NLTK 데이터 다운로드 (최초 실행 시)
 try:
     download('punkt', quiet=True)
@@ -49,9 +53,9 @@ class VLMConfig:
     """VLM 예측 및 평가 설정을 통합 관리하는 데이터클래스"""
     
     # 📁 데이터 및 모델 경로
-    model_path: str = ''
-    base_model_id: str = "Qwen/Qwen2-VL-7B-Instruct" 
-
+    model_path: str = '/workspace/Toonspace_VLM/ex_models/OCR_visual_prompting'
+    base_model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated" 
+    image_prompt : bool = False
     # ➡️ 예측 모드 설정
     image_folder: str = '/workspace/Toonspace_VLM/webtoon_images'
     use_previous_context: bool = False
@@ -65,7 +69,7 @@ class VLMConfig:
 # 현재 이미지를 위의 컨텍스트를 고려하여 분석해주세요. 이 웹툰 이미지의 대사, 효과음, 캐릭터 행동, 감정을 JSON 형식으로 추출해주세요."""
 
     # 📊 평가 모드 설정
-    test_data_path: str = '/workspace/Toonspace_VLM/test/OCR_test_dataset.json'
+    test_data_path: str = '/workspace/Toonspace_VLM/test/korean_test_dataset.json'
     compute_bertscore: bool = True
     compute_json_metrics: bool = True
     
@@ -105,6 +109,7 @@ class WebtoonVLM:
         self.model = None
         self.processor = None
         self.rouge = Rouge()
+        self.detection_model = None
         
         self.load_model_and_processor()
 
@@ -139,6 +144,10 @@ class WebtoonVLM:
         except Exception as e:
             self.logger.error(f"모델 로드 중 치명적 오류 발생: {e}")
             raise
+        
+        if self.config.image_prompt:
+            self.detection_model = YOLO("/workspace/yolo/weight/YOLOv11_OBB_KR_1.pt") 
+
 
     def clear_memory(self) -> None:
         """GPU 메모리 정리"""
@@ -221,6 +230,16 @@ class WebtoonVLM:
         for idx, sample in enumerate(tqdm(test_data, desc="Evaluating")):
             try:
                 query = sample['query']
+                if self.config.image_prompt:
+                    BBOX_OCR_QUERIES = [
+                    # 빨간 박스 + 텍스트별 BBOX 요청 (가장 명확한 요청)
+                    "이 그림에서 붉은색 박스 안에 있는 모든 텍스트를 개별적으로 인식하고, 각 텍스트의 백분율 바운딩 박스를 추출해 줘.",
+                    "이미지 내 빨간 상자로 둘러싸인 텍스트들 각각의 내용과, 그 개별 백분위 BBOX 좌표를 알려줘.",
+                    "빨간색으로 표시된 영역 내 문자를 파악하고, 각 문자의 위치를 백분위 바운딩 박스로 추출해.",
+                    "이 사진에서 빨간색 테두리 안의 글씨를 모두 인식하고, 그 개별 텍스트별 BBOX를 백분율 좌표계로 알려줘.",
+                    "적색 상자에 있는 모든 문자를 읽어내고, 그 각각의 바운딩 박스를 백분위로 제공해."]
+                    query = random.choice(BBOX_OCR_QUERIES)
+
                 result = self._predict_single(image_path=sample['image_path'], query=query)
                 result['ground_truth'] = sample['answer']
                 results_with_metadata.append(result)
@@ -463,12 +482,88 @@ class WebtoonVLM:
         predictions_path = Path(self.config.output_dir) / self.config.predictions_file
         with open(predictions_path, 'w', encoding='utf-8') as f: json.dump(predictions_output, f, ensure_ascii=False, indent=2)
         self.logger.info(f"개별 예측 결과 저장 완료: {predictions_path}")
+    
+    @torch.no_grad()
+    def make_image_bbox(self,source_path):
+
+        # 3. 이미지 파일 읽기 및 NumPy 배열로 변환
+
+        img_bgr = cv2.imread(source_path)
+
+        if img_bgr is None:
+            print(f"오류: 이미지를 로드할 수 없습니다. 경로를 확인하세요. ({source_path})")
+            # 이미지 로드 실패 시 종료
+            exit()
+
+        # BGR -> RGB 변환 (NumPy 배열 입력)
+        img_rgb_numpy = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+        results_list = self.detection_model.predict(source=img_rgb_numpy, verbose=False)
+
+        result = results_list[0] 
+
+        # OBB 모델의 결과는 .obb 속성에 저장됩니다.
+        obb_results = result.obb
+
+        visualized_image = img_bgr.copy()
+
+
+
+        # OBB 결과가 None이 아니고 탐지된 객체가 있을 때 처리
+        if obb_results is not None and len(obb_results) > 0:
+            print(f"탐지된 OBB 객체 수: {len(obb_results)}")
+            # OBB 데이터는 xywhr (중심 x, 중심 y, 너비, 높이, 각도) 형식입니다.
+            # .xywhr: NumPy 배열 형태의 OBB 정보
+            obb_data = obb_results.xywhr.cpu().numpy()
+            confs = obb_results.conf.cpu().numpy()
+            cls_ids = obb_results.cls.cpu().numpy()
+
+            for obb_info, conf, cls_id in zip(obb_data, confs, cls_ids):
+                xc, yc, w, h, angle_rad = obb_info
+                label = self.detection_model.names[int(cls_id)]
+                
+                # OBB 좌표 및 신뢰도 출력
+                print(f"클래스: {label}, 신뢰도: {conf:.2f}, OBB(xywhr): [x={xc:.1f}, y={yc:.1f}, w={w:.1f}, h={h:.1f}, angle_rad={angle_rad:.2f}]")
+
+                # 참고: OBB 결과를 시각화하려면 cv2.boxPoints() 등을 사용하여 4개 코너 좌표로 변환해야 합니다.
+
+                rect = ((xc, yc), (w, h), np.degrees(angle_rad))
+                box_points = cv2.boxPoints(rect) # 4개 코너 좌표 [x, y] 배열 반환
+                box_points = np.int32(box_points)#box_points.astype(int)
+
+                # 이미지에 빨간색 박스 그리기
+                cv2.polylines(visualized_image, [box_points], isClosed=True, color=(0, 0, 255), thickness=2)
+                
+                # 텍스트 레이블 (클래스 이름 및 신뢰도) 추가 (선택 사항)
+                # 텍스트를 그릴 시작점 계산 (보통 박스 상단 왼쪽)
+                # OBB의 경우 텍스트 위치 계산이 더 복잡할 수 있으나, 여기서는 근사적으로 처리
+                text_origin_x = int(min(p[0] for p in box_points))
+                text_origin_y = int(min(p[1] for p in box_points)) - 10 # 박스 위 10px
+                
+                # 이미지 경계를 벗어나지 않도록 조정
+                if text_origin_y < 15: # 너무 위로 올라가지 않게
+                    text_origin_y = int(max(p[1] for p in box_points)) + 15
+                    
+                # cv2.putText(visualized_image, f"{label} {conf:.2f}", 
+                #             (text_origin_x, text_origin_y), 
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+
+        pil_img = Image.fromarray(visualized_image)
+        return pil_img 
+
 
     @torch.no_grad()
     def _predict_single(self, image_path: Union[str, Path], query: str) -> Dict[str, Any]:
         """단일 이미지에 대한 예측을 수행하는 공통 함수"""
         try:
-            image = Image.open(image_path).convert('RGB')
+            if self.config.image_prompt:
+                # image prompt 씌우기 
+                image = self.make_image_bbox(image_path)
+            else:
+                image = Image.open(image_path).convert('RGB')
+
+                
+
             messages = [{"role": "system", "content": self.config.system_message}, {"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": query}]}]
             text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             image_inputs, _ = process_vision_info(messages)
@@ -489,20 +584,14 @@ def main():
     
     parser = argparse.ArgumentParser(description='VLM 모델 예측 및 평가 통합 스크립트')
     parser.add_argument('--mode', type=str, default='evaluate', choices=['predict', 'evaluate'])
-    parser.add_argument('--model_path', type=str, default='/workspace/Toonspace_VLM/ex_models/at_once_ocr_description')
-    parser.add_argument('--base_model_id', type=str, default='huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated')
     parser.add_argument('--image_folder', type=str, default='/workspace/Toonspace_VLM/ex_models/OCR_visual_prompting')
-    parser.add_argument('--test_data_path', type=str, default='/workspace/Toonspace_VLM/test/OCR_test_dataset.json')
     parser.add_argument('--output_dir', type=str, default='results')
     parser.add_argument('--use_context', action=argparse.BooleanOptionalAction, default=True)
 
     args = parser.parse_args()
     
     config = VLMConfig(
-        model_path=args.model_path,
-        base_model_id=args.base_model_id,
         image_folder=args.image_folder,
-        test_data_path=args.test_data_path,
         output_dir=args.output_dir,
         use_previous_context=args.use_context
     )
