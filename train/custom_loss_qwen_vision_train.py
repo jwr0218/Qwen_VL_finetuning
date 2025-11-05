@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import torch
+from torch import nn 
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, get_peft_model
 from qwen_vl_utils import process_vision_info
@@ -31,9 +32,9 @@ from transformers import (
     TrainingArguments,
 )
 from accelerate import Accelerator
+from toonVLM.weight_utils import WeightedVLDataCollator, WeightedLossTrainer
 
 import wandb
-
 
 
 
@@ -48,8 +49,8 @@ class TrainingConfig:
     output_dir: str = "ex_models/OCR_visual_prompting"
     
     # 모델 설정
-    model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
-    # model_id : str = '/workspace/Toonspace_VLM/ex_models/OCR'
+    # model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    model_id : str = '/workspace/Toonspace_VLM/ex_models/OCR_visual_prompting'
     processor_id  : str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
     
     # 데이터 분할 비율
@@ -58,7 +59,7 @@ class TrainingConfig:
     test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 7
+    num_train_epochs: int = 4
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 4
@@ -77,7 +78,7 @@ class TrainingConfig:
     early_stopping_patience: int = 10
 
     #wandb 설정 추기 
-    wandb_project_name: str = "Webtoon-vlm-OCR-Visual-prompting"
+    wandb_project_name: str = "Webtoon-vlm-OCR-weighted_loss_re_training"
 
 
     
@@ -85,6 +86,8 @@ class TrainingConfig:
     system_message: str = field(default="""
     당신은 웹툰 이미지 분석 전문가입니다. 성인 웹툰 이미지를 분석하여 장면별로 효과음, 말풍선, 서사적 맥락을 정확히 추출하고, JSON 형식으로 구조화된 결과를 제공합니다. 모든 텍스트 요소(대사, 효과음, 나레이션)를 한국어로 추출하고, 캐릭터 관계와 상황 맥락을 세밀히 분석하며, 오해석을 최소화하십시오
     """)
+
+
 
 
 class VLMTrainer:
@@ -200,9 +203,9 @@ class VLMTrainer:
             train_dataset = dataset["train"].select(range(0, train_size))
             eval_dataset = dataset["train"].select(range(train_size, train_size + eval_size))
             test_dataset = dataset["train"].select(range(train_size + eval_size, train_size + eval_size * 2))
-            test_dataset.to_json("test_data.json", orient="records", lines=True)
+            test_dataset.to_json("korean_test_data.json", orient="records", lines=True)
 
-            print("test_dataset이 'test_data.json' 파일로 저장되었습니다.")
+            print("test_dataset이 'korean_test_data.json' 파일로 저장되었습니다.")
 
             # filtered_dataset = dataset.filter(lambda x: x["query"] in ['OCR&BBOX'])['train'].to_pandas()
 
@@ -215,21 +218,21 @@ class VLMTrainer:
             # print('check')
             # exit()
 
-            # 데이터 포맷팅
-            train_formatted = [self.format_data(sample) for sample in train_dataset]
-            eval_formatted = [self.format_data(sample) for sample in eval_dataset]
-            test_formatted = [self.format_data(sample) for sample in test_dataset]
+            # # 데이터 포맷팅
+            train_dataset = [self.format_data(sample) for sample in train_dataset]
+            eval_dataset = [self.format_data(sample) for sample in eval_dataset]
+            test_dataset = [self.format_data(sample) for sample in test_dataset]
             
             self.logger.info(f"데이터셋 로드 완료:")
-            self.logger.info(f"  - 학습 데이터: {len(train_formatted)}개")
-            self.logger.info(f"  - 검증 데이터: {len(eval_formatted)}개") 
-            self.logger.info(f"  - 테스트 데이터: {len(test_formatted)}개")
+            self.logger.info(f"  - 학습 데이터: {len(train_dataset)}개")
+            self.logger.info(f"  - 검증 데이터: {len(eval_dataset)}개") 
+            self.logger.info(f"  - 테스트 데이터: {len(test_dataset)}개")
             
             # 샘플 데이터 출력
             # if train_formatted:
             #     self.logger.info(f"샘플 데이터:\n{train_formatted[0]}")
             
-            return train_formatted, eval_formatted, test_formatted
+            return train_dataset, eval_dataset, test_dataset
             
         except Exception as e:
             self.logger.error(f"데이터셋 로드 중 오류 발생: {e}")
@@ -258,43 +261,7 @@ class VLMTrainer:
         except Exception as e:
             self.logger.error(f"모델 로드 중 오류 발생: {e}")
             raise
-    
-    def create_collate_fn(self):
-        """데이터 콜레이션 함수 생성"""
-        def collate_fn(examples: List[Dict]) -> Dict[str, torch.Tensor]:
-            """
-            비전-언어 모델 학습을 위한 사용자 정의 데이터 콜레이션 함수
-            
-            Args:
-                examples: 포맷된 대화 예제 목록
-                
-            Returns:
-                배치 딕셔너리 (input_ids, attention_mask, pixel_values, labels)
-            """
-            # print(examples)
-            # exit()
-            texts = [
-                self.processor.apply_chat_template(example, tokenize=False) 
-                for example in examples
-            ]
 
-            image_inputs = [process_vision_info(example)[0] for example in examples]
-            # print(examples[0])
-            batch = self.processor(
-                text=texts, 
-                images=image_inputs, 
-                return_tensors="pt", 
-                padding=True
-            )
-            
-            labels = batch["input_ids"].clone()
-            labels[labels == self.processor.tokenizer.pad_token_id] = -100
-            batch["labels"] = labels
-            
-            return batch
-        
-        return collate_fn
-    
     def create_training_args(self) -> SFTConfig:
         """학습 설정 생성 (FSDP 활성화)"""
         return SFTConfig(
@@ -330,19 +297,21 @@ class VLMTrainer:
             dataset_text_field="",
             dataset_kwargs={"skip_prepare_dataset": True},
             local_rank=-1,
+            #ㅣloss custom
+            remove_unused_columns=False,
             # FSDP 활성화
-            fsdp="full_shard auto_wrap",
-            fsdp_config={
-                "min_num_params": 0,
-                "xla": False,
-                "xla_fsdp_grad_ckpt": False,
-                "backward_prefetch": "backward_pre",
-                "forward_prefetch": False,
-                "limit_all_gathers": True,
-                "use_orig_params": False,
-                "cpu_offload": False,
-                "sync_module_states": True,  # 중요: 모듈 상태 동기화
-            },
+            # fsdp="full_shard auto_wrap",
+            # fsdp_config={
+            #     "min_num_params": 0,
+            #     "xla": False,
+            #     "xla_fsdp_grad_ckpt": False,
+            #     "backward_prefetch": "backward_pre",
+            #     "forward_prefetch": False,
+            #     "limit_all_gathers": True,
+            #     "use_orig_params": False,
+            #     "cpu_offload": False,
+            #     "sync_module_states": True,  # 중요: 모듈 상태 동기화
+            # },
         )
     
     def train(self) -> None:
@@ -361,24 +330,47 @@ class VLMTrainer:
             
             # 학습 설정
             training_args = self.create_training_args()
-            collate_fn = self.create_collate_fn()
+            # (processor 및 train_dataset 로드 완료 가정)
+
+            data_collator = WeightedVLDataCollator(
+                processor= self.processor,
+                text_weight=3.0,  # 텍스트 가중치 5배
+                bbox_weight=1.0   # BBox 가중치 1배
+            )
             
             # Trainer 설정
-            trainer = Trainer(
+            # 3. WeightedLossTrainer 인스턴스 생성
+            trainer = WeightedLossTrainer(
                 model=self.model,
                 args=training_args,
                 train_dataset=train_dataset,
                 eval_dataset=eval_dataset,
-                data_collator=collate_fn,
+                data_collator=data_collator,
                 tokenizer=self.processor.tokenizer,
                 callbacks=[EarlyStoppingCallback(
                     early_stopping_patience=self.config.early_stopping_patience
                 )],
             )
-            
-            # 학습 실행
-            self.logger.info("학습 시작")
+
+            # 4. 학습 시작
             trainer.train()
+
+
+            # trainer = Trainer(
+            #     model=self.model,
+            #     args=training_args,
+            #     train_dataset=train_dataset,
+            #     eval_dataset=eval_dataset,
+            #     data_collator=collate_fn,
+            #     tokenizer=self.processor.tokenizer,
+            #     callbacks=[EarlyStoppingCallback(
+            #         early_stopping_patience=self.config.early_stopping_patience
+            #     )],
+            # )
+            
+            # # 학습 실행
+            # self.logger.info("학습 시작")
+            # trainer.train()
             
             # 모델 저장
             self.logger.info(f"모델 저장: {self.config.output_dir}")

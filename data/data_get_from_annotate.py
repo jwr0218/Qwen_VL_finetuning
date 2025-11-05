@@ -48,10 +48,10 @@ OCR_QUERIES = [
 
 def transform_to_qa_format(input_file_path, output_file_path):
     """
-    OCR 주석 딕셔너리를 "Query-Answer" 형식의 리스트로 변환합니다.
+    OCR 주석 딕셔너리를 "Query-Answer-TextParts" 형식의 리스트로 변환합니다.
 
     - 입력 형식: { "image_path": [ ... annotations ... ] }
-    - 출력 형식: [ { "image_path": "...", "query": "...", "answer": "GRAB : [x1,y1,x2,y2]" }, ... ]
+    - 출력 형식: [ { "image_path": "...", "query": "...", "answer": "...", "text_parts": ["text1", "text2"] }, ... ]
     - 경로에 "Target_paired_visual_prompting"이 있으면 BBOX_OCR_QUERIES 사용
     - 경로에 "Target_paired"만 있으면 OCR_QUERIES 사용
     """
@@ -75,34 +75,38 @@ def transform_to_qa_format(input_file_path, output_file_path):
         
         current_query_list = None
         
-        # 3. (중요) 경로명에 따른 쿼리 리스트 선택
-        # "Target_paired_visual_prompting"을 "Target_paired"보다 먼저 확인해야 합니다.
+        # 3. 경로명에 따른 쿼리 리스트 선택
         if "Target_paired_visual_prompting" in image_path:
             current_query_list = BBOX_OCR_QUERIES
         elif "Target_paired" in image_path:
             current_query_list = OCR_QUERIES
         
-        # 일치하는 조건이 없는 경로는 건너뜀
         if not current_query_list:
             print(f"경고: 쿼리 조건을 찾을 수 없습니다. 경로를 건너뜁니다: '{image_path}'")
             continue
             
         # 4. 각 이미지의 annotation 리스트 순회 (BBOX 마다 Q/A 1개 생성)
         
-
         # 7. "query" 랜덤 선택 (선택된 리스트에서)
-        query_string_list = random.sample(current_query_list,3)
+        # (참고: 원본 코드는 이미지당 3개의 쿼리를 *샘플링*합니다.)
+        query_string_list = random.sample(current_query_list, min(len(current_query_list), 3)) # 3개 또는 그 이하
         
         for query_string in query_string_list:
-            # print(query_string)
-            scene_answer_part = []    
+            
+            scene_answer_part = []
+            scene_text_parts = []  # (NEW) 텍스트만 저장할 리스트 초기화
+            
             for annotation in annotations_list:
                 try:
-                    # 5. 바운딩 박스 좌표 추출
-                    if annotation.get('text') is None : 
+                    # 5. 텍스트 및 바운딩 박스 좌표 추출
+                    text = annotation.get('text') # (수정됨) 텍스트를 변수로 먼저 추출
+                    
+                    if text is None: 
                         skip_number +=1 
                         continue
                         
+                    # (NEW) 가중치를 줄 텍스트를 리스트에 추가
+                    scene_text_parts.append(text)
 
                     bbox = annotation.get("bbox_pixel", {})
                     x1 = bbox['x1']
@@ -111,21 +115,30 @@ def transform_to_qa_format(input_file_path, output_file_path):
                     y2 = bbox['y2']
 
                     # 6. "answer" 문자열 포맷팅
-                    answer_string = f"{annotation.get('text')} : [{x1},{y1},{x2},{y2}]"
+                    answer_string = f"{text} : [{x1},{y1},{x2},{y2}]" # (수정됨) text 변수 사용
                     
                     scene_answer_part.append(answer_string)
+                    
                 except KeyError as e:
                     print(f"경고: 주석에서 필수 키({e})를 찾을 수 없습니다. (이미지: {image_path})")
                 except Exception as e:
                     print(f"오류: 주석 처리 중 에러 발생: {e} (이미지: {image_path})")
-            # 8. (수정됨) "image_path"를 포함하여 Q/A 딕셔너리 생성
+            
+            # (수정됨) 텍스트 부분이 하나도 없으면 이 Q/A 쌍은 생성하지 않음
+            if not scene_answer_part:
+                continue
+
+            # 8. (수정됨) "text_parts"를 포함하여 Q/A 딕셔너리 생성
             scene_answer_all = "\n".join(scene_answer_part)
+            
             qa_pair = {
                 "image_path": image_path,
                 "query": query_string,
-                "answer": scene_answer_all
+                "answer": scene_answer_all,
+                "text_parts": scene_text_parts  # (NEW) 수집된 텍스트 리스트 추가
             }
             output_data_list.append(qa_pair)
+            
     # 9. 변환된 데이터를 새 JSON 파일로 저장
     try:
         with open(output_file_path, 'w', encoding='utf-8') as f:
