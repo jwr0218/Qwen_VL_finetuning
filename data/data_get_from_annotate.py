@@ -115,7 +115,7 @@ def transform_to_qa_format(input_file_path, output_file_path):
                     y2 = bbox['y2']
 
                     # 6. "answer" 문자열 포맷팅
-                    answer_string = f"{text} : [{x1},{y1},{x2},{y2}]" # (수정됨) text 변수 사용
+                    answer_string = f"{text} : [{x1:.2f},{y1:.2f},{x2:.2f},{y2:.2f}]"
                     
                     scene_answer_part.append(answer_string)
                     
@@ -155,7 +155,7 @@ def transform_to_qa_format(input_file_path, output_file_path):
 # --- 코드 실행 예제 ---
 
 # 2. 변환 함수 실행
-output_filename = "ocr_description/total(bbox_normal)_ocr_dataset.json"
+output_filename = "ocr_description/total(bbox_normal)_ocr_dataset_2F.json"
 input_file_name = '/workspace/Toonspace_VLM/data/OCR(bbox_merge)_json_data/total_korean_ocr.json'
 transform_to_qa_format(input_file_name, output_filename)
 

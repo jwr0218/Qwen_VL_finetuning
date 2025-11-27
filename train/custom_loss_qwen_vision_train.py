@@ -27,6 +27,7 @@ from trl import SFTConfig
 from transformers import (
     AutoProcessor,
     EarlyStoppingCallback,
+    Qwen3VLForConditionalGeneration,
     Qwen2_5_VLForConditionalGeneration,
     Trainer,
     TrainingArguments,
@@ -45,13 +46,14 @@ class TrainingConfig:
     """학습 설정을 관리하는 데이터클래스"""
     
     # 데이터 경로
-    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/total(bbox_normal)_ocr_dataset.json'
-    output_dir: str = "ex_models/OCR_visual_prompting"
+    data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/total(bbox_normal)_ocr_dataset_2F.json'
+    output_dir: str = "ex_models/qwen_3_OCR_visual_prompting_20:1_2F"
     
     # 모델 설정
     # model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
-    model_id : str = '/workspace/Toonspace_VLM/ex_models/OCR_visual_prompting'
-    processor_id  : str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    model_id : str = 'huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated'
+    # processor_id  : str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
+    processor_id  : str = 'huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated'
     
     # 데이터 분할 비율
     train_ratio: float = 0.95
@@ -59,26 +61,33 @@ class TrainingConfig:
     test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 4
-    per_device_train_batch_size: int = 1
-    per_device_eval_batch_size: int = 1
+    num_train_epochs: int = 10
+    per_device_train_batch_size: int = 2
+    per_device_eval_batch_size: int = 2
     gradient_accumulation_steps: int = 4
-    learning_rate: float = 3e-5
+    # learning_rate: float = 3e-5
+    learning_rate: float = 5e-6
     max_grad_norm: float = 0.4
-    warmup_ratio: float = 0.1
+    warmup_ratio: float = 0.03
     
+    text_weight : float =2.0  # 텍스트 가중치
+    bbox_weight: float = 0.1   # BBox 가중치
+
+
+
     # 프로세서 설정
     min_pixels: int = 256 * 28 * 28
     max_pixels: int = 960 * 28 * 28
     
     # 로깅 설정
-    logging_steps: int = 100
-    eval_steps: int = 500
+    logging_steps: int = 50
+    eval_steps: int = 200
     save_steps: int = 100000
     early_stopping_patience: int = 10
-
+    
     #wandb 설정 추기 
-    wandb_project_name: str = "Webtoon-vlm-OCR-weighted_loss_re_training"
+    wandb_project: str = "qwen3-Webtoon-vlm-OCR-normal_loss"
+    wandb_name : str = 'loss_ratio = 20:1'
 
 
     
@@ -222,7 +231,14 @@ class VLMTrainer:
             train_dataset = [self.format_data(sample) for sample in train_dataset]
             eval_dataset = [self.format_data(sample) for sample in eval_dataset]
             test_dataset = [self.format_data(sample) for sample in test_dataset]
-            
+            # 2. [수정] json 라이브러리를 사용하여 "lines=True"와 동일하게 파일에 쓰기
+            with open("korean_test_data.json", "w", encoding="utf-8") as f:
+                for item in test_dataset:
+                    # 각 항목을 JSON 문자열로 변환하고 줄바꿈(\n) 추가
+                    # ensure_ascii=False는 한글이 깨지지 않도록 보장
+                    import json
+                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
             self.logger.info(f"데이터셋 로드 완료:")
             self.logger.info(f"  - 학습 데이터: {len(train_dataset)}개")
             self.logger.info(f"  - 검증 데이터: {len(eval_dataset)}개") 
@@ -243,13 +259,19 @@ class VLMTrainer:
         try:
             self.logger.info(f"모델 로드 시작: {self.config.model_id}")
             
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            self.model = Qwen3VLForConditionalGeneration.from_pretrained(
                 self.config.model_id,
                 # device_map="cuda",
                 torch_dtype=torch.bfloat16, 
                 trust_remote_code = True
             )
-
+            # self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            #     self.config.model_id,
+            #     # device_map="cuda",
+            #     torch_dtype=torch.bfloat16, 
+            #     trust_remote_code = True
+            # )
+                
             self.processor = AutoProcessor.from_pretrained(
                 self.config.processor_id,
                 min_pixels=self.config.min_pixels,
@@ -273,7 +295,7 @@ class VLMTrainer:
             gradient_checkpointing=True,
             optim="adafactor",
             learning_rate=self.config.learning_rate,
-            lr_scheduler_type="constant",
+            lr_scheduler_type="cosine",
             logging_steps=self.config.logging_steps,
             eval_steps=self.config.eval_steps,
             eval_strategy="steps",
@@ -292,7 +314,7 @@ class VLMTrainer:
             ddp_find_unused_parameters=False,  # FSDP 사용 시 False 권장
             dataloader_num_workers=1,
             report_to=["wandb"],
-            run_name=self.config.wandb_project_name,
+            run_name=self.config.wandb_project,
             gradient_checkpointing_kwargs={"use_reentrant": False},
             dataset_text_field="",
             dataset_kwargs={"skip_prepare_dataset": True},
@@ -300,18 +322,18 @@ class VLMTrainer:
             #ㅣloss custom
             remove_unused_columns=False,
             # FSDP 활성화
-            # fsdp="full_shard auto_wrap",
-            # fsdp_config={
-            #     "min_num_params": 0,
-            #     "xla": False,
-            #     "xla_fsdp_grad_ckpt": False,
-            #     "backward_prefetch": "backward_pre",
-            #     "forward_prefetch": False,
-            #     "limit_all_gathers": True,
-            #     "use_orig_params": False,
-            #     "cpu_offload": False,
-            #     "sync_module_states": True,  # 중요: 모듈 상태 동기화
-            # },
+            fsdp="full_shard auto_wrap",
+            fsdp_config={
+                "min_num_params": 0,
+                "xla": False,
+                "xla_fsdp_grad_ckpt": False,
+                "backward_prefetch": "backward_pre",
+                "forward_prefetch": False,
+                "limit_all_gathers": True,
+                "use_orig_params": False,
+                "cpu_offload": False,
+                "sync_module_states": True,  # 중요: 모듈 상태 동기화
+            },
         )
     
     def train(self) -> None:
@@ -334,8 +356,8 @@ class VLMTrainer:
 
             data_collator = WeightedVLDataCollator(
                 processor= self.processor,
-                text_weight=3.0,  # 텍스트 가중치 5배
-                bbox_weight=1.0   # BBox 가중치 1배
+                text_weight=self.config.text_weight,  # 텍스트 가중치
+                bbox_weight=self.config.bbox_weight   # BBox 가중치
             )
             
             # Trainer 설정
@@ -400,7 +422,7 @@ def main():
         
 
         # wandb 초기화
-        wandb.init(project=config.wandb_project_name)
+        wandb.init(project=config.wandb_project , name = config.wandb_name)
 
 
 

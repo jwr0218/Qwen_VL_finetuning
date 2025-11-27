@@ -71,7 +71,7 @@ class TrainingConfig:
     max_pixels: int = 960 * 28 * 28
     
     # 로깅 설정
-    logging_steps: int = 100
+    logging_steps: int = 5
     eval_steps: int = 500
     save_steps: int = 100000
     early_stopping_patience: int = 10
