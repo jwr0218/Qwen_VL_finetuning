@@ -47,11 +47,11 @@ class TrainingConfig:
     
     # 데이터 경로
     data_path: str = '/workspace/Toonspace_VLM/data/ocr_description/total(bbox_normal)_ocr_dataset_2F.json'
-    output_dir: str = "ex_models/qwen_3_OCR_visual_prompting_20:1_2F"
+    output_dir: str = "ex_models/native_stepped/step3_full"
     
     # 모델 설정
     # model_id: str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
-    model_id : str = 'huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated'
+    model_id : str = 'ex_models/native_stepped/step2_decoder'
     # processor_id  : str = "huihui-ai/Qwen2.5-VL-7B-Instruct-abliterated"
     processor_id  : str = 'huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated'
     
@@ -61,7 +61,7 @@ class TrainingConfig:
     test_ratio: float = 0.025
     
     # 학습 하이퍼파라미터
-    num_train_epochs: int = 10
+    num_train_epochs: int = 5
     per_device_train_batch_size: int = 2
     per_device_eval_batch_size: int = 2
     gradient_accumulation_steps: int = 4
@@ -70,7 +70,7 @@ class TrainingConfig:
     max_grad_norm: float = 0.4
     warmup_ratio: float = 0.03
     
-    text_weight : float =2.0  # 텍스트 가중치
+    text_weight : float =1.0  # 텍스트 가중치
     bbox_weight: float = 0.1   # BBox 가중치
 
 
@@ -87,7 +87,7 @@ class TrainingConfig:
     
     #wandb 설정 추기 
     wandb_project: str = "qwen3-Webtoon-vlm-OCR-normal_loss"
-    wandb_name : str = 'loss_ratio = 20:1'
+    wandb_name : str = 'loss_ratio = 10:1 + step Full'
 
 
     

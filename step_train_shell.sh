@@ -26,7 +26,7 @@ STEP3_TEXT_WEIGHT=2.0
 STEP3_BBOX_WEIGHT=0.1
 
 # 공통 설정
-BATCH_SIZE=2
+BATCH_SIZE=1
 ACCUM_STEPS=4
 
 # 에러 발생 시 중단
@@ -37,50 +37,50 @@ STEP1_DIR="${OUTPUT_ROOT}/step1_internal_adapter"
 STEP2_DIR="${OUTPUT_ROOT}/step2_decoder"
 STEP3_DIR="${OUTPUT_ROOT}/step3_full"
 
-echo "======================================================"
-echo "🚀 Step 1: Internal Adapter Only (Weight ${STEP1_TEXT_WEIGHT}:${STEP1_BBOX_WEIGHT})"
-echo "======================================================"
+# echo "======================================================"
+# echo "🚀 Step 1: Internal Adapter Only (Weight ${STEP1_TEXT_WEIGHT}:${STEP1_BBOX_WEIGHT})"
+# echo "======================================================"
 
-accelerate launch --multi_gpu --num_processes=2 train/step_train.py \
-    --model_id "$BASE_MODEL" \
-    --processor_id "$BASE_MODEL" \
-    --data_path "$DATA_PATH" \
-    --output_dir "$STEP1_DIR" \
-    --stage "step1" \
-    --wandb_project "$PROJECT_NAME" \
-    --wandb_name "step1_merger_only" \
-    --num_train_epochs 3 \
-    --learning_rate $STEP1_LR \
-    --per_device_train_batch_size $BATCH_SIZE \
-    --gradient_accumulation_steps $ACCUM_STEPS \
-    --text_weight $STEP1_TEXT_WEIGHT \
-    --bbox_weight $STEP1_BBOX_WEIGHT \
+# accelerate launch --multi_gpu --num_processes=2 train/step_train.py \
+#     --model_id "$BASE_MODEL" \
+#     --processor_id "$BASE_MODEL" \
+#     --data_path "$DATA_PATH" \
+#     --output_dir "$STEP1_DIR" \
+#     --stage "step1" \
+#     --wandb_project "$PROJECT_NAME" \
+#     --wandb_name "step1_merger_only" \
+#     --num_train_epochs 3 \
+#     --learning_rate $STEP1_LR \
+#     --per_device_train_batch_size $BATCH_SIZE \
+#     --gradient_accumulation_steps $ACCUM_STEPS \
+#     --text_weight $STEP1_TEXT_WEIGHT \
+#     --bbox_weight $STEP1_BBOX_WEIGHT \
 
-echo "✅ Step 1 Completed."
-sleep 60
+# echo "✅ Step 1 Completed."
+# sleep 60
 
-echo "======================================================"
-echo "🚀 Step 2: Decoder Training (Weight ${STEP2_TEXT_WEIGHT}:${STEP2_BBOX_WEIGHT})"
-echo "======================================================"
+# echo "======================================================"
+# echo "🚀 Step 2: Decoder Training (Weight ${STEP2_TEXT_WEIGHT}:${STEP2_BBOX_WEIGHT})"
+# echo "======================================================"
 
-accelerate launch --multi_gpu --num_processes=2 train/step_train.py \
-    --model_id "$BASE_MODEL" \
-    --processor_id "$BASE_MODEL" \
-    --data_path "$DATA_PATH" \
-    --resume_from_prev_stage "$STEP1_DIR" \
-    --output_dir "$STEP2_DIR" \
-    --stage "step2" \
-    --wandb_project "$PROJECT_NAME" \
-    --wandb_name "step2_decoder_ft" \
-    --num_train_epochs 5 \
-    --learning_rate $STEP2_LR \
-    --per_device_train_batch_size $BATCH_SIZE \
-    --gradient_accumulation_steps $ACCUM_STEPS \
-    --text_weight $STEP2_TEXT_WEIGHT \
-    --bbox_weight $STEP2_BBOX_WEIGHT \
+# accelerate launch --multi_gpu --num_processes=2 train/step_train.py \
+#     --model_id "$BASE_MODEL" \
+#     --processor_id "$BASE_MODEL" \
+#     --data_path "$DATA_PATH" \
+#     --resume_from_prev_stage "$STEP1_DIR" \
+#     --output_dir "$STEP2_DIR" \
+#     --stage "step2" \
+#     --wandb_project "$PROJECT_NAME" \
+#     --wandb_name "step2_decoder_ft" \
+#     --num_train_epochs 5 \
+#     --learning_rate $STEP2_LR \
+#     --per_device_train_batch_size $BATCH_SIZE \
+#     --gradient_accumulation_steps $ACCUM_STEPS \
+#     --text_weight $STEP2_TEXT_WEIGHT \
+#     --bbox_weight $STEP2_BBOX_WEIGHT \
 
-echo "✅ Step 2 Completed."
-sleep 60
+# echo "✅ Step 2 Completed."
+# sleep 60
 
 echo "======================================================"
 echo "🚀 Step 3: Full Fine-tuning (Weight ${STEP3_TEXT_WEIGHT}:${STEP3_BBOX_WEIGHT})"

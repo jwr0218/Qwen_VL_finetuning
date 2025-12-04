@@ -59,7 +59,7 @@ class DataArguments:
 class TrainingConfig(TrainingArguments):
     output_dir: str = field(default="ex_models/output")
     num_train_epochs: int = field(default=10)
-    per_device_train_batch_size: int = field(default=2)
+    per_device_train_batch_size: int = field(default=1)
     per_device_eval_batch_size: int = field(default=2)
     gradient_accumulation_steps: int = field(default=4)
     learning_rate: float = field(default=5e-6)
@@ -90,6 +90,15 @@ class TrainingConfig(TrainingArguments):
         default=None,
         metadata={"help": "Path to the FULL model checkpoint from the previous stage"}
     )
+    def __post_init__(self):
+        # 1. stage가 step3인 경우 optimizer를 adafactor로 변경
+        if self.stage == "step3":
+            print(f"!!! Stage is {self.stage}. Switching optimizer to Adafactor !!!")
+            self.optim = "adafactor"
+        
+        # 2. 부모 클래스(TrainingArguments)의 __post_init__ 호출 (필수)
+        #    이것을 호출해야 부모 클래스의 유효성 검사 및 설정이 정상적으로 동작합니다.
+        super().__post_init__()
 
 class VLMTrainer:
     def __init__(self, model_args, data_args, training_args):
